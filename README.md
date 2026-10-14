@@ -1,3 +1,68 @@
+<!-- low-cost:start -->
+
+# REA Low-Cost
+
+Fork do [morluto/rea](https://github.com/morluto/rea) (licença MIT) focado em **menos tokens e menos tempo** para agentes que usam o REA via MCP. As ferramentas, os contratos e os resultados continuam os mesmos do REA original. O que muda é quanto cada sessão custa e quanto ela demora.
+
+## Ganhos medidos
+
+Medido em Windows 11, Node 24.11.1, REA 6.5.0 (207 ferramentas), comparando este fork com o upstream 6.5.0 sem modificações. Tempos são medianas de rodadas quentes; tokens estimados em 4 caracteres por token.
+
+| O que foi medido                                                      | Upstream 6.5.0  | REA Low-Cost            | Ganho                 |
+| --------------------------------------------------------------------- | --------------- | ----------------------- | --------------------- |
+| Primeira resposta de uma sessão MCP nova                              | 2.216 ms        | **192 ms** (com daemon) | **11,5× mais rápido** |
+| Catálogo `tools/list` enviado ao cliente                              | 3,09 MB         | **215 KB**              | **−93%**              |
+| Texto das ferramentas lido pelo modelo em toda sessão                 | ~196 mil tokens | **~44 mil tokens**      | **−77%**              |
+| `binary_session` sem alvo aberto                                      | 64,6 KB¹        | **31,5 KB**             | **−51%**              |
+| Capturar o HTML do google.com (`capture_browser_scenario`)            | 3,9–5,4 s       | **2,3–2,7 s**           | **~2×**               |
+| Reanalisar um app Next.js de 13 MB (`analyze_javascript_application`) | 73,6 s          | **29,1 s**              | **2,5×**              |
+| Analisar a versão seguinte do mesmo app (um chunk alterado)           | 59,6 s²         | **33,7 s**              | **1,8×**              |
+
+¹ Medido no fork com `"detail": "full"`, que devolve o mesmo conteúdo do upstream. ² Medido no fork com `REA_CACHE=off`, que executa o mesmo caminho de código do upstream.
+
+**Os resultados são idênticos ao REA original.** Na análise JavaScript, o `evidence_id`, que é o SHA-256 do resultado semântico completo, é o mesmo no upstream e no fork, com e sem cache. O `tools/list` tem o mesmo SHA-256 no modo direto e no daemon. O HTML capturado do Google renderiza igual nas três versões testadas (6.4.0 do npm, upstream 6.5.0 e este fork).
+
+## O que mudou
+
+| Mudança                                                                                                                                               | Como ativar                                      | Detalhes                                                               |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| **Daemon compartilhado.** `rea mcp` vira um proxy fino para um processo REA já carregado. Cada sessão continua isolada, com ambiente e alvo próprios. | `REA_DAEMON=1`                                   | [docs/shared-daemon.md](docs/shared-daemon.md)                         |
+| **Schemas enxutos por padrão.** Input `compact` e output schemas omitidos no `tools/list`. O REA continua validando todo resultado.                   | padrão; `REA_MCP_*_SCHEMA_PROFILE=full` restaura | [docs/token-defaults.md](docs/token-defaults.md)                       |
+| **`binary_session` resumido.** Sem o catálogo de capacidades de provedores não instalados e sem diagnósticos.                                         | padrão; `"detail": "full"` restaura              | [docs/token-defaults.md](docs/token-defaults.md)                       |
+| **Cache da análise JavaScript.** Resultado por arquivo, endereçado pelo conteúdo; arquivos que não mudaram são reaproveitados entre versões do app.   | padrão; `REA_CACHE=off` desliga                  | [docs/javascript-analysis-cache.md](docs/javascript-analysis-cache.md) |
+
+Correções feitas no caminho: digest do catálogo `compact` memoizado (antes custava ~270 ms em cada conexão do daemon) e daemon desatualizado após um rebuild agora se encerra sozinho em até 30 s.
+
+## Usar no Claude Code
+
+```sh
+git clone https://github.com/dev-ViniciusMonteiro/rea-low-cost.git
+cd rea-low-cost
+npm ci
+npm run build:cached
+claude mcp add rea -s user -e REA_DAEMON=1 -- node /caminho/para/rea-low-cost/scripts/rea.mjs mcp
+```
+
+No Windows, o build local não gera o addon nativo (`native/windows/build/rea-windows-x64.node`), que só é compilado em Linux com MinGW. Copie-o do pacote `rea-agents` da mesma versão e confira com `npm run verify:windows-native:artifact`.
+
+```sh
+node scripts/rea.mjs daemon status   # pid, conexões ativas e atendidas
+node scripts/rea.mjs daemon stop     # encerra as sessões e o daemon
+```
+
+## Reproduzir as medições
+
+```sh
+npm run bench:mcp-startup -- --mode both --runs 5   # partida: direto x daemon
+npm run bench:mcp-tokens                            # tamanho do que o cliente recebe
+```
+
+Para atualizar com o REA original: `git fetch upstream && git merge upstream/main`.
+
+---
+
+<!-- low-cost:end -->
+
 <div align="center">
 
 **English** · [简体中文](docs/readme/README_zh.md) · [繁體中文](docs/readme/README_zh-TW.md) · [日本語](docs/readme/README_ja.md) · [한국어](docs/readme/README_ko.md) · [Türkçe](docs/readme/README_tr.md) · [Русский](docs/readme/README_ru.md) · [Tiếng Việt](docs/readme/README_vi.md) · [ไทย](docs/readme/README_th.md) · [Deutsch](docs/readme/README_de.md) · [Español](docs/readme/README_es.md) · [Français](docs/readme/README_fr.md) · [Українська](docs/readme/README_uk.md) · [Polski](docs/readme/README_pl.md) · [Português (Brasil)](docs/readme/README_pt-BR.md) · [العربية](docs/readme/README_ar.md) · [فارسی](docs/readme/README_fa.md) · [Bahasa Indonesia](docs/readme/README_id.md) · [Italiano](docs/readme/README_it.md)

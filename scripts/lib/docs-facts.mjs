@@ -113,7 +113,12 @@ export const documentationFactIssues = async (root, catalog) => {
   ].sort();
   const readmes = new Map();
   for (const path of readmePaths) {
-    const content = await readFile(join(root, path), "utf8");
+    // The fork's own section is not translated; upstream link parity applies
+    // to the shared README content only.
+    const content = (await readFile(join(root, path), "utf8")).replace(
+      /<!-- low-cost:start -->[\s\S]*?<!-- low-cost:end -->/u,
+      "",
+    );
     readmes.set(path, content);
     requireText(issues, path, content, "MCP-tool_catalog");
     if (path === "README.md") {
