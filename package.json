@@ -135,6 +135,8 @@
     "jscpd:details": "jscpd src/ tests/ --no-tips",
     "scan:todos": "node scripts/scan-todos.mjs",
     "start": "node scripts/rea.mjs mcp",
+    "bench:mcp-startup": "node scripts/bench-mcp-startup.mjs",
+    "bench:mcp-tokens": "node scripts/bench-mcp-tokens.mjs",
     "test": "npm run test:with-build",
     "test:with-build": "npm run test:prepare && vitest run",
     "test:run": "vitest run",
