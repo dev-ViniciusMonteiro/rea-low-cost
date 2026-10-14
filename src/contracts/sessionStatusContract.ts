@@ -19,4 +19,10 @@ export const binarySessionInputSchema = z.strictObject({
       "Absolute local filesystem path expected for the running server; relative paths are rejected.",
     )
     .optional(),
+  detail: z
+    .enum(["summary", "full"])
+    .default("summary")
+    .describe(
+      "summary (default) keeps capability sets only for available providers and omits provider diagnostics; full returns every candidate's capability sets and diagnostics.",
+    ),
 });

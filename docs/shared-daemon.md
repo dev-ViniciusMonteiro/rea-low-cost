@@ -36,7 +36,8 @@ byte-identical to direct mode (`tools/list` SHA-256 matches).
   token from a `0600` state file before it serves anything.
 - **Lifetime.** The daemon exits after `REA_DAEMON_IDLE_MS` (default 15 min)
   without clients. A rebuild changes the fingerprint, so new sessions start a
-  fresh daemon and the old one idles out.
+  fresh daemon; the old one checks its build every 30 s and exits as soon as
+  it has no clients left.
 - **Fallback.** If no daemon can be started or reached within
   `REA_DAEMON_START_TIMEOUT_MS` (default 120 s), the proxy serves the session
   in-process exactly as `rea mcp` does without `REA_DAEMON`.

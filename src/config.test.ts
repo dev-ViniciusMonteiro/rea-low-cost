@@ -5,6 +5,10 @@ import {
   parseConfig,
 } from "./config/parseConfig.js";
 import { projectAnalysisError } from "./domain/analysisErrorProjection.js";
+import {
+  PRODUCTION_SCHEMA_PROFILE_DEFAULTS,
+  withProductionSchemaProfiles,
+} from "./config/productionSchemaProfiles.js";
 
 it("reports a configuration failure for a NUL in Hopper loader arguments", () => {
   const result = parseConfig({
@@ -392,5 +396,22 @@ describe("default macOS Hopper launcher", () => {
       ok: true,
       value: { hopperLauncherPath: configured },
     });
+  });
+});
+
+describe("production schema profile defaults", () => {
+  it("fills unset profiles with the lean production presentation", () => {
+    expect(withProductionSchemaProfiles({ PATH: "/bin" })).toEqual({
+      PATH: "/bin",
+      ...PRODUCTION_SCHEMA_PROFILE_DEFAULTS,
+    });
+  });
+
+  it("keeps an explicit caller selection", () => {
+    const environment = {
+      REA_MCP_INPUT_SCHEMA_PROFILE: "full",
+      REA_MCP_OUTPUT_SCHEMA_PROFILE: "full",
+    };
+    expect(withProductionSchemaProfiles(environment)).toBe(environment);
   });
 });

@@ -98,6 +98,14 @@ export const createCatalogDigests = (
   } as const;
 };
 
+// The contracts are static, so a presentation's digests are the same for every
+// server in the process. Computing the compact digests costs about 270 ms,
+// which the shared daemon would otherwise pay on every new connection.
+const digestsByPresentation = new Map<
+  number | "full",
+  ReturnType<typeof createCatalogDigests>
+>();
+
 export const createCatalogIdentity = (
   compactPresentation: CompactInputSchemaPresentation | undefined = undefined,
 ) => {
@@ -105,7 +113,7 @@ export const createCatalogIdentity = (
     compactPresentation === undefined
       ? undefined
       : { budgetBytes: compactPresentation.budgetBytes };
-  let catalogDigests: ReturnType<typeof createCatalogDigests> | undefined;
+  const key = selectedPresentation?.budgetBytes ?? "full";
   return {
     counts: {
       cli_commands: CLI_COMMAND_NAMES.length,
@@ -113,11 +121,15 @@ export const createCatalogIdentity = (
       mcp_prompts: promptCatalog.length,
     },
     get digests() {
-      return (catalogDigests ??= createCatalogDigests(
+      const cached = digestsByPresentation.get(key);
+      if (cached !== undefined) return cached;
+      const computed = createCatalogDigests(
         TOOL_CONTRACTS,
         PROMPT_CONTRACTS,
         selectedPresentation,
-      ));
+      );
+      digestsByPresentation.set(key, computed);
+      return computed;
     },
   } as const;
 };

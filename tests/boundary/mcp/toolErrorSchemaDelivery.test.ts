@@ -13,7 +13,10 @@ it("delivers typed tool failures without violating the advertised success schema
   const root = await mkdtemp(join(tmpdir(), "rea-tool-error-schema-"));
   onTestFinished(() => rm(root, { recursive: true, force: true }));
   const missing = join(root, "not-present.bin");
-  const { client, call } = await connectLocalToolsMcp();
+  // Failures are checked against the advertised success schemas.
+  const { client, call } = await connectLocalToolsMcp({
+    REA_MCP_OUTPUT_SCHEMA_PROFILE: "full",
+  });
   const tools = (await client.listTools()).tools;
   const failures: string[] = [];
   const requests = [

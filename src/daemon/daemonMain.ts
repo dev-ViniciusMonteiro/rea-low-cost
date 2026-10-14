@@ -11,7 +11,11 @@ import {
 import { run } from "../main.js";
 import { SERVER_START_FAILED } from "../main/messages.js";
 import type { RuntimeDependencies } from "../main/types.js";
-import { resolveDaemonEndpoint, type DaemonEndpoint } from "./endpoint.js";
+import {
+  resolveDaemonEndpoint,
+  runtimeIdentity,
+  type DaemonEndpoint,
+} from "./endpoint.js";
 import {
   DAEMON_PROTOCOL_VERSION,
   readLine,
@@ -24,6 +28,9 @@ import {
 
 const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
 const SHUTDOWN_GRACE_MS = 10_000;
+// A rebuild selects a new fingerprint, so new clients never reach this daemon
+// again; it only has to finish serving the clients it already has.
+const STALE_BUILD_CHECK_MS = 30_000;
 
 const parsePositiveInteger = (
   value: string | undefined,
@@ -120,11 +127,31 @@ class ReaDaemon {
   #servedConnections = 0;
   #stopping: Promise<void> | undefined;
   #idleTimer: NodeJS.Timeout | undefined;
+  #staleTimer: NodeJS.Timeout | undefined;
+  readonly #packageRoot: string;
+  readonly #buildIdentity: string;
 
-  constructor(endpoint: DaemonEndpoint, idleTimeoutMs: number) {
+  constructor(
+    endpoint: DaemonEndpoint,
+    idleTimeoutMs: number,
+    packageRoot: string,
+  ) {
     this.#endpoint = endpoint;
     this.#idleTimeoutMs = idleTimeoutMs;
+    this.#packageRoot = packageRoot;
+    this.#buildIdentity = runtimeIdentity(packageRoot);
     this.#server = createServer((socket) => this.#accept(socket));
+  }
+
+  /** Exit once the build this daemon serves was replaced and it is idle. */
+  #watchForStaleBuild(): void {
+    this.#staleTimer = setInterval(() => {
+      if (
+        this.#sockets.size === 0 &&
+        runtimeIdentity(this.#packageRoot) !== this.#buildIdentity
+      )
+        void this.stop("stale-build");
+    }, STALE_BUILD_CHECK_MS);
   }
 
   /** Listen, publish credentials, and resolve once the daemon has stopped. */
@@ -163,6 +190,7 @@ class ReaDaemon {
       idleTimeoutMs: this.#idleTimeoutMs,
     });
     this.#armIdleTimer();
+    this.#watchForStaleBuild();
     const onSignal = (): void => {
       void this.stop("signal").finally(() => process.exit(0));
     };
@@ -179,6 +207,7 @@ class ReaDaemon {
     this.#stopping ??= (async () => {
       log("daemon stopping", { reason, activeConnections: this.#sockets.size });
       if (this.#idleTimer !== undefined) clearTimeout(this.#idleTimer);
+      if (this.#staleTimer !== undefined) clearInterval(this.#staleTimer);
       this.#server.close();
       for (const socket of this.#sockets) socket.destroy();
       const pending = Promise.allSettled(
@@ -357,4 +386,5 @@ export const runDaemon = (options: {
       process.env.REA_DAEMON_IDLE_MS,
       DEFAULT_IDLE_TIMEOUT_MS,
     ),
+    options.packageRoot,
   ).serve();
