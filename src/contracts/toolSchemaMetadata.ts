@@ -56,8 +56,33 @@ const PROPERTY_DESCRIPTIONS: Readonly<Record<string, string>> = {
 
 type JsonSchemaProjection = z.ZodType["~standard"]["jsonSchema"]["input"];
 
+// A contract's advertised projection depends only on the contract, so every
+// server instance in one process (one per connection under the shared daemon)
+// reuses the same wrapper and its memoized JSON Schema.
+const advertisedInputSchemas = new WeakMap<ToolContract, z.ZodType>();
+const advertisedOutputSchemas = new WeakMap<ToolContract, z.ZodType>();
+
+const perContract = <Contract extends ToolContract, Schema extends z.ZodType>(
+  cache: WeakMap<ToolContract, z.ZodType>,
+  contract: Contract,
+  build: () => Schema,
+): Schema => {
+  const cached = cache.get(contract);
+  if (cached !== undefined) return cached as Schema;
+  const built = build();
+  cache.set(contract, built);
+  return built;
+};
+
 /** Attach caller guidance to a canonical schema for the SDK wire projection. */
 export const toolInputSchemaWithMetadata = <Contract extends ToolContract>(
+  contract: Contract,
+): Contract["inputSchema"] =>
+  perContract(advertisedInputSchemas, contract, () =>
+    advertisedInputSchema(contract),
+  );
+
+const advertisedInputSchema = <Contract extends ToolContract>(
   contract: Contract,
 ): Contract["inputSchema"] =>
   withAdvertisedJsonSchema(
@@ -104,6 +129,13 @@ export const advertisedInputJsonSchema = <Contract extends ToolContract>(
 
 /** Share output definitions and content-bound validator identities on the wire. */
 export const toolOutputSchemaWithMetadata = <Contract extends ToolContract>(
+  contract: Contract,
+): Contract["outputSchema"] =>
+  perContract(advertisedOutputSchemas, contract, () =>
+    advertisedOutputSchema(contract),
+  );
+
+const advertisedOutputSchema = <Contract extends ToolContract>(
   contract: Contract,
 ): Contract["outputSchema"] =>
   withAdvertisedJsonSchema(

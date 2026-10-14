@@ -80,7 +80,7 @@ export const run = async (
         )),
   });
   if (!transport.ok) return 1;
-  createShutdown({
+  const { shutdown } = createShutdown({
     handle: transport.handle,
     closeAndroid: transport.closeAndroid,
     closeOptionalProviders: transport.closeOptionalProviders,
@@ -88,6 +88,7 @@ export const run = async (
     dependencies,
     serverLogger,
   });
+  dependencies.onShutdownReady?.(shutdown);
   return 0;
 };
 

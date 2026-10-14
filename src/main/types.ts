@@ -8,4 +8,6 @@ export interface RuntimeDependencies {
   readonly registerShutdown: (handler: () => void) => () => void;
   readonly createServer?: typeof import("../server/createServer.js").createServer;
   readonly loadOptionalProviders?: () => Promise<OptionalProviderLoadResult>;
+  /** Receives the connection's idempotent cleanup once serving starts. */
+  readonly onShutdownReady?: (shutdown: () => Promise<void>) => void;
 }
