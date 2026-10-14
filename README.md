@@ -2,13 +2,25 @@
 
 # REA Low-Cost
 
-Fork do [morluto/rea](https://github.com/morluto/rea) (licença MIT) focado em **menos tokens e menos tempo** para agentes que usam o REA via MCP. As ferramentas, os contratos e os resultados continuam os mesmos do REA original. O que muda é quanto cada sessão custa e quanto ela demora.
+**O mesmo REA, com sessões novas até 11× mais rápidas e um catálogo de ferramentas com 77% menos tokens.**
+
+Fork não oficial do [REA (Reverse Engineer Anything)](https://github.com/morluto/rea), criado por [morluto](https://github.com/morluto) e mantido pela comunidade do projeto. Este fork otimiza o custo e o tempo de uso do REA por agentes de IA via MCP, sem mudar o que ele faz nem o que ele responde.
+
+> [!NOTE]
+> Este repositório **não é a distribuição oficial** do REA. Para a versão oficial, use [morluto/rea](https://github.com/morluto/rea), [rea.tools](https://rea.tools/) ou o pacote [rea-agents](https://www.npmjs.com/package/rea-agents). As melhorias deste fork podem ser propostas ao projeto original.
+
+## Por que usar
+
+- **Sessões mais baratas.** Todo agente que se conecta ao REA recebe o catálogo das 207 ferramentas. Aqui esse catálogo cai de 3,09 MB para 215 KB, e o texto que o modelo lê cai de ~196 mil para ~44 mil tokens em **toda** sessão.
+- **Sessões mais rápidas.** Com o daemon, uma sessão nova responde em ~0,2 s em vez de ~2,2 s, porque o REA já está carregado e não é reiniciado a cada conversa.
+- **Análises repetidas mais rápidas.** Reanalisar um app JavaScript, ou a próxima versão dele, reaproveita o trabalho dos arquivos que não mudaram.
+- **Mesmos resultados.** As ferramentas, os parâmetros e os resultados são os do REA original, e as provas por hash estão abaixo. Tudo o que mudou pode ser desligado por variável de ambiente.
 
 ## Ganhos medidos
 
-Medido em Windows 11, Node 24.11.1, REA 6.5.0 (207 ferramentas), comparando este fork com o upstream 6.5.0 sem modificações. Tempos são medianas de rodadas quentes; tokens estimados em 4 caracteres por token.
+Windows 11, Node 24.11.1, REA 6.5.0 (207 ferramentas), comparando este fork com o upstream 6.5.0 sem modificações. Tempos são medianas de rodadas quentes; tokens estimados em 4 caracteres por token.
 
-| O que foi medido                                                      | Upstream 6.5.0  | REA Low-Cost            | Ganho                 |
+| O que foi medido                                                      | REA original    | REA Low-Cost            | Ganho                 |
 | --------------------------------------------------------------------- | --------------- | ----------------------- | --------------------- |
 | Primeira resposta de uma sessão MCP nova                              | 2.216 ms        | **192 ms** (com daemon) | **11,5× mais rápido** |
 | Catálogo `tools/list` enviado ao cliente                              | 3,09 MB         | **215 KB**              | **−93%**              |
@@ -18,22 +30,27 @@ Medido em Windows 11, Node 24.11.1, REA 6.5.0 (207 ferramentas), comparando este
 | Reanalisar um app Next.js de 13 MB (`analyze_javascript_application`) | 73,6 s          | **29,1 s**              | **2,5×**              |
 | Analisar a versão seguinte do mesmo app (um chunk alterado)           | 59,6 s²         | **33,7 s**              | **1,8×**              |
 
-¹ Medido no fork com `"detail": "full"`, que devolve o mesmo conteúdo do upstream. ² Medido no fork com `REA_CACHE=off`, que executa o mesmo caminho de código do upstream.
+¹ Medido no fork com `"detail": "full"`, que devolve o mesmo conteúdo do original. ² Medido no fork com `REA_CACHE=off`, que executa o mesmo caminho de código do original.
 
-**Os resultados são idênticos ao REA original.** Na análise JavaScript, o `evidence_id`, que é o SHA-256 do resultado semântico completo, é o mesmo no upstream e no fork, com e sem cache. O `tools/list` tem o mesmo SHA-256 no modo direto e no daemon. O HTML capturado do Google renderiza igual nas três versões testadas (6.4.0 do npm, upstream 6.5.0 e este fork).
+**Como sabemos que os resultados são os mesmos:**
 
-## O que mudou
+- Na análise JavaScript, o `evidence_id` (SHA-256 do resultado semântico completo) é idêntico no original e no fork, com e sem cache.
+- O `tools/list` tem o mesmo SHA-256 no modo direto e no daemon.
+- O HTML capturado do Google renderiza igual nas três versões testadas (6.4.0 do npm, original 6.5.0 e este fork).
+- Nenhum teste do projeto passou a falhar em relação ao original.
 
-| Mudança                                                                                                                                               | Como ativar                                      | Detalhes                                                               |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
-| **Daemon compartilhado.** `rea mcp` vira um proxy fino para um processo REA já carregado. Cada sessão continua isolada, com ambiente e alvo próprios. | `REA_DAEMON=1`                                   | [docs/shared-daemon.md](docs/shared-daemon.md)                         |
-| **Schemas enxutos por padrão.** Input `compact` e output schemas omitidos no `tools/list`. O REA continua validando todo resultado.                   | padrão; `REA_MCP_*_SCHEMA_PROFILE=full` restaura | [docs/token-defaults.md](docs/token-defaults.md)                       |
-| **`binary_session` resumido.** Sem o catálogo de capacidades de provedores não instalados e sem diagnósticos.                                         | padrão; `"detail": "full"` restaura              | [docs/token-defaults.md](docs/token-defaults.md)                       |
-| **Cache da análise JavaScript.** Resultado por arquivo, endereçado pelo conteúdo; arquivos que não mudaram são reaproveitados entre versões do app.   | padrão; `REA_CACHE=off` desliga                  | [docs/javascript-analysis-cache.md](docs/javascript-analysis-cache.md) |
+## O que fizemos
 
-Correções feitas no caminho: digest do catálogo `compact` memoizado (antes custava ~270 ms em cada conexão do daemon) e daemon desatualizado após um rebuild agora se encerra sozinho em até 30 s.
+| Melhoria                      | O que resolve                                                                                                                                                                               | Como controlar                                   | Detalhes                                                               |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| **Daemon compartilhado**      | Cada sessão MCP iniciava um REA novo e pagava toda a partida. Agora `rea mcp` é um proxy fino para um processo já carregado; cada sessão continua isolada, com ambiente e alvo próprios.    | `REA_DAEMON=1`                                   | [docs/shared-daemon.md](docs/shared-daemon.md)                         |
+| **Schemas enxutos**           | Os schemas de saída eram 76% do `tools/list` e não são necessários para chamar uma ferramenta. Agora vêm omitidos e os de entrada vêm compactos; o REA continua validando todo resultado.   | padrão; `REA_MCP_*_SCHEMA_PROFILE=full` restaura | [docs/token-defaults.md](docs/token-defaults.md)                       |
+| **`binary_session` resumido** | O status trazia ~27 KB de capacidades do Ghidra mesmo sem o Ghidra instalado. Agora traz só as capacidades dos provedores disponíveis, mantendo o motivo de cada indisponibilidade.         | padrão; `"detail": "full"` restaura              | [docs/token-defaults.md](docs/token-defaults.md)                       |
+| **Cache da análise JS**       | Cada análise refazia o parsing de todos os arquivos, inclusive os de vendor (React, Next) que quase nunca mudam. Agora o resultado de cada arquivo fica em cache, endereçado pelo conteúdo. | padrão; `REA_CACHE=off` desliga                  | [docs/javascript-analysis-cache.md](docs/javascript-analysis-cache.md) |
 
-## Usar no Claude Code
+Correções feitas no caminho: o digest do catálogo compacto agora é calculado uma vez por processo (antes custava ~270 ms em cada conexão do daemon), e um daemon desatualizado após um rebuild se encerra sozinho em até 30 s.
+
+## Como usar no Claude Code
 
 ```sh
 git clone https://github.com/dev-ViniciusMonteiro/rea-low-cost.git
@@ -48,18 +65,24 @@ No Windows, o build local não gera o addon nativo (`native/windows/build/rea-wi
 ```sh
 node scripts/rea.mjs daemon status   # pid, conexões ativas e atendidas
 node scripts/rea.mjs daemon stop     # encerra as sessões e o daemon
+npm run bench:mcp-startup -- --mode both --runs 5   # reproduz a medição de partida
+npm run bench:mcp-tokens                            # reproduz a medição de tokens
 ```
 
-## Reproduzir as medições
+Para receber as atualizações do REA original: `git fetch upstream && git merge upstream/main`.
 
-```sh
-npm run bench:mcp-startup -- --mode both --runs 5   # partida: direto x daemon
-npm run bench:mcp-tokens                            # tamanho do que o cliente recebe
-```
+## Créditos e licença
 
-Para atualizar com o REA original: `git fetch upstream && git merge upstream/main`.
+- **REA** é criado e mantido por [morluto](https://github.com/morluto) e por mais de 220 contribuidores do [projeto original](https://github.com/morluto/rea/graphs/contributors). Todo o trabalho de engenharia reversa, os provedores e os contratos são deles.
+- Este fork é mantido por [Vinicius Monteiro](https://github.com/dev-ViniciusMonteiro) e acrescenta apenas as otimizações de custo e tempo descritas acima.
+- O código segue sob a [licença MIT](LICENSE) do projeto original, com o aviso de copyright de morluto preservado. Componentes de terceiros mantêm suas próprias licenças e avisos, listados em [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- Ferramentas como Ghidra, IDA, Hopper e JADX não são distribuídas aqui. Cada usuário instala as suas, conforme a licença de cada uma.
 
 ---
+
+## Documentação original do REA
+
+A partir daqui segue o README do projeto original, sem modificações.
 
 <!-- low-cost:end -->
 
