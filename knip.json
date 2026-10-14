@@ -3,6 +3,8 @@
   "entry": [
     "src/main.ts",
     "src/cli.ts",
+    "src/daemon/daemonMain.ts",
+    "src/daemon/proxy.ts",
     "src/composition/javascriptAnalysisWorkerProcess.ts",
     "src/contracts/errorSchemas.ts",
     "src/evaluation/AgentEvaluationFixtures.ts",

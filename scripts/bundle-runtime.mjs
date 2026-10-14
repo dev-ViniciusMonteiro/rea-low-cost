@@ -18,7 +18,7 @@ export const bundleRuntime = async (root) => {
     await readFile(join(root, "package.json"), "utf8"),
   );
   for (const [directory, entries] of [
-    ["mcp", { main: "main.js" }],
+    ["mcp", { main: "main.js", daemon: "daemon/daemonMain.js" }],
     [
       "cli-runtime",
       {

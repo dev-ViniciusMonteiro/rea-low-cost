@@ -14,6 +14,15 @@ process.env.REA_PACKAGE_VERSION = packageJson.version;
 const isMcpMode =
   args.length === 1 && (args[0] === "--mcp" || args[0] === "mcp");
 const isMcpDoctorMode = args[0] === "mcp" && args[1] === "doctor";
+// Opt-in shared daemon: `rea mcp` becomes a thin proxy to one long-lived
+// server per configuration, so new MCP sessions skip REA's startup.
+const useDaemonProxy = isMcpMode && process.env.REA_DAEMON === "1";
+const daemonCommand =
+  args[0] === "daemon" &&
+  args.length === 2 &&
+  ["serve", "status", "stop"].includes(args[1])
+    ? args[1]
+    : undefined;
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // Windows home lookup throws for an empty USERPROFILE. Dependencies resolve
@@ -36,21 +45,47 @@ if (
   process.env.PLAYWRIGHT_BROWSERS_PATH = join(cacheRoot, "ms-playwright");
 }
 
-const runtimeFiles = isMcpMode
-  ? ["dist/mcp/main.js"]
-  : isMcpDoctorMode
-    ? ["dist/mcp/main.js", "dist/cli-runtime/mcpDoctor.js"]
-    : [
-        "dist/cli-runtime/cli.js",
-        "dist/cli-runtime/cliOutput.js",
-        "dist/cli-runtime/cliResultOutput.js",
-      ];
+const runtimeFiles = useDaemonProxy
+  ? ["dist/daemon/proxy.js", "dist/mcp/main.js"]
+  : daemonCommand === "serve"
+    ? ["dist/mcp/daemon.js"]
+    : daemonCommand !== undefined
+      ? ["dist/daemon/proxy.js"]
+      : isMcpMode
+        ? ["dist/mcp/main.js"]
+        : isMcpDoctorMode
+          ? ["dist/mcp/main.js", "dist/cli-runtime/mcpDoctor.js"]
+          : [
+              "dist/cli-runtime/cli.js",
+              "dist/cli-runtime/cliOutput.js",
+              "dist/cli-runtime/cliResultOutput.js",
+            ];
 
 if (!(await compiledRuntimeExists(runtimeFiles))) {
   process.stderr.write(
     `REA's compiled runtime is missing. Run \`npm ci && npm run build:cached\` in ${packageRoot} to install dependencies and build REA, then restart it. If this is an installed package, reinstall rea-agents.\n`,
   );
   process.exitCode = 1;
+} else if (daemonCommand === "serve") {
+  const { runDaemon } = await import("../dist/mcp/daemon.js");
+  // Provider children may hold handles after cleanup; the daemon owns exit.
+  process.exit(await runDaemon({ packageRoot }));
+} else if (daemonCommand !== undefined) {
+  const { runDaemonCommand } = await import("../dist/daemon/proxy.js");
+  process.exitCode = await runDaemonCommand(daemonCommand, { packageRoot });
+} else if (useDaemonProxy) {
+  const { runDaemonProxy } = await import("../dist/daemon/proxy.js");
+  const outcome = await runDaemonProxy({
+    packageRoot,
+    dispatcherPath: fileURLToPath(import.meta.url),
+  });
+  if (outcome === "fallback") {
+    process.stderr.write(
+      "REA daemon unavailable; serving this MCP session in-process.\n",
+    );
+    const { runEntrypoint } = await import("../dist/mcp/main.js");
+    await runEntrypoint();
+  }
 } else if (isMcpMode) {
   const { runEntrypoint } = await import("../dist/mcp/main.js");
   await runEntrypoint();
