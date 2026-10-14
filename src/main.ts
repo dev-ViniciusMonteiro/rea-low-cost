@@ -8,6 +8,7 @@ import { realpathSync } from "node:fs";
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 
 import { parseConfig } from "./config/parseConfig.js";
+import { withProductionSchemaProfiles } from "./config/productionSchemaProfiles.js";
 import { createBinarySession } from "./composition/binary.js";
 import { createLogger } from "./logger.js";
 import { projectAnalysisError } from "./domain/analysisErrorProjection.js";
@@ -51,7 +52,9 @@ const runtimeDependencies = (): RuntimeDependencies => ({
 export const run = async (
   dependencies: RuntimeDependencies = runtimeDependencies(),
 ): Promise<number> => {
-  const environment = snapshotEnvironment(dependencies.env);
+  const environment = withProductionSchemaProfiles(
+    snapshotEnvironment(dependencies.env),
+  );
   const config = parseConfig(environment);
   if (!config.ok) {
     dependencies.writeStderr(`${projectAnalysisError(config.error).message}\n`);

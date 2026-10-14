@@ -97,7 +97,7 @@ export const daemonEnvironmentKey = (
 };
 
 /** Build identity: a rebuilt runtime gets a fresh daemon. */
-const runtimeIdentity = (packageRoot: string): string => {
+export const runtimeIdentity = (packageRoot: string): string => {
   try {
     const stat = statSync(join(packageRoot, "dist", "mcp", "main.js"));
     return `${stat.size}:${stat.mtimeMs}`;

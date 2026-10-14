@@ -78,7 +78,11 @@ describe("production MCP doctor probe validation", () => {
   it("rejects a schema-invalid probe while retaining the discovered inventory", async () => {
     const root = await createTestTempDirectory("rea-mcp-doctor-reply-");
     const snapshotPath = join(root, "reply.json");
-    const environment = { PATH: process.env.PATH ?? "" };
+    // The probe validates replies against the advertised output schemas.
+    const environment = {
+      PATH: process.env.PATH ?? "",
+      REA_MCP_OUTPUT_SCHEMA_PROFILE: "full",
+    };
     const client = new Client({ name: "doctor-reply-capture", version: "1" });
     const transport = new StdioClientTransport({
       command: process.execPath,
